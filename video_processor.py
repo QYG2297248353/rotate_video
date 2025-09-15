@@ -28,13 +28,24 @@ class VideoProcessor:
         return rotation_filters.get(rotation, "transpose=1")
     
     def get_hw_accel_params(self, hw_accel):
-        """根据硬件加速选项返回FFmpeg参数"""
+        """根据硬件加速选项返回输入参数（-hwaccel）"""
         if hw_accel == "nvenc":
-            return ["-hwaccel", "cuda", "-c:v", "h264_nvenc"]
+            return ["-hwaccel", "cuda"]
         elif hw_accel == "qsv":
-            return ["-hwaccel", "qsv", "-c:v", "h264_qsv"]
+            return ["-hwaccel", "qsv"]
         elif hw_accel == "amf":
-            return ["-hwaccel", "d3d11va", "-c:v", "h264_amf"]
+            return ["-hwaccel", "d3d11va"]
+        else:
+            return []  # 软件编码不需要硬件加速参数
+    
+    def get_video_codec_params(self, hw_accel):
+        """根据硬件加速选项返回视频编码器参数"""
+        if hw_accel == "nvenc":
+            return ["-c:v", "h264_nvenc"]
+        elif hw_accel == "qsv":
+            return ["-c:v", "h264_qsv"]
+        elif hw_accel == "amf":
+            return ["-c:v", "h264_amf"]
         else:
             return ["-c:v", "libx264"]
     
@@ -81,28 +92,35 @@ class VideoProcessor:
     def _try_encode(self, input_file, output_file, rotation, hw_accel):
         """尝试编码视频文件"""
         try:
-            # 构建FFmpeg命令，给文件路径加双引号以处理中文、空格和特殊字符
-            cmd = [self.ffmpeg_path, "-i", f'"{input_file}"']
+            # 构建FFmpeg命令字符串，正确的参数顺序：输入选项 → 输入文件 → 输出选项 → 输出文件
+            cmd_parts = [f'"{self.ffmpeg_path}"']
             
-            # 添加硬件加速参数
+            # 添加输入选项（硬件加速必须在-i之前）
             hw_params = self.get_hw_accel_params(hw_accel)
-            cmd.extend(hw_params)
+            cmd_parts.extend(hw_params)
             
-            # 添加旋转滤镜
+            # 添加输入文件
+            cmd_parts.extend(["-i", f'"{input_file}"'])
+            
+            # 添加输出选项：视频编码器、旋转滤镜、音频复制
+            video_codec_params = self.get_video_codec_params(hw_accel)
+            cmd_parts.extend(video_codec_params)
+            
             rotation_filter = self.get_rotation_filter(rotation)
-            cmd.extend(["-vf", rotation_filter])
+            cmd_parts.extend(["-vf", rotation_filter, "-c:a", "copy", "-y", f'"{output_file}"'])
             
-            # 添加音频复制和输出文件，输出路径也加双引号
-            cmd.extend(["-c:a", "copy", "-y", f'"{output_file}"'])
+            # 将命令列表转换为字符串
+            cmd_str = ' '.join(cmd_parts)
             
             if self.ui_callback:
                 accel_type = "软件编码" if hw_accel == "software" else f"{hw_accel.upper()}硬件加速"
                 self.ui_callback('log', f"开始处理: {os.path.basename(input_file)} ({accel_type})")
-                self.ui_callback('log', f"命令: {' '.join(cmd)}")
+                self.ui_callback('log', f"命令: {cmd_str}")
             
-            # 启动进程
+            # 启动进程，使用shell=True以正确处理路径中的特殊字符
             process = subprocess.Popen(
-                cmd,
+                cmd_str,
+                shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 universal_newlines=True,

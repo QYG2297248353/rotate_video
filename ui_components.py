@@ -24,8 +24,13 @@ class VideoRotatorUI:
     def setup_window(self):
         """设置窗口属性"""
         self.root.title("视频旋转工具")
-        # 让窗口充满屏幕，移除固定尺寸限制
-        self.root.state('zoomed')  # Windows下最大化窗口
+        # 设置窗口大小和位置
+        try:
+            # 尝试最大化窗口
+            self.root.state('zoomed')
+        except tk.TclError:
+            # 如果最大化失败，使用固定大小
+            self.root.geometry('1000x700')
         self.root.minsize(750, 500)
     
     def create_variables(self):
