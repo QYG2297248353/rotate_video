@@ -345,7 +345,7 @@ class VideoRotatorUI:
         separator.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
         
         # 版权信息标签 - 居中显示
-        copyright_text = "© 2024 视频旋转工具 - 基于FFmpeg开发 | 作者: AI助手 | 版本: 2.0"
+        copyright_text = "© 2025 视频旋转工具 - 基于FFmpeg开发 | 作者: 新疆萌森软件开发工作室 | 版本: 2.0"
         copyright_label = ttk.Label(copyright_frame, text=copyright_text, 
                                    font=('', 8), foreground='gray', anchor='center')
         copyright_label.grid(row=1, column=0, sticky=(tk.W, tk.E))
