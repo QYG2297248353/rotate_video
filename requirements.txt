@@ -1,0 +1,28 @@
+# 视频旋转工具依赖项
+# Video Rotator Tool Dependencies
+
+# 拖拽支持库 (可选，用于拖拽功能)
+# Drag and drop support library (optional, for drag and drop functionality)
+tkinterdnd2>=0.3.0
+
+# 注意：本程序还需要以下系统依赖：
+# Note: This program also requires the following system dependencies:
+# - FFmpeg: 用于视频处理 (for video processing)
+#   下载地址 (Download from): https://ffmpeg.org/download.html
+#   或使用包管理器安装 (or install via package manager):
+#   - Windows: choco install ffmpeg
+#   - 或直接下载解压到系统PATH中 (or download and extract to system PATH)
+
+# Python标准库依赖 (已包含在Python中):
+# Python standard library dependencies (included with Python):
+# - tkinter
+# - os
+# - re
+# - subprocess
+# - threading
+# - time
+# - datetime
+# - json
+# - sys
+# - pathlib
+# - shutil

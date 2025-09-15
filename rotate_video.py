@@ -11,6 +11,14 @@ import sys
 from pathlib import Path
 import shutil
 
+# 尝试导入拖拽支持库
+try:
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+    DRAG_DROP_AVAILABLE = True
+except ImportError:
+    DRAG_DROP_AVAILABLE = False
+    print("警告: 未安装tkinterdnd2库，拖拽功能将不可用。可通过 pip install tkinterdnd2 安装。")
+
 class VideoRotator:
     def __init__(self, root):
         self.root = root
@@ -24,6 +32,9 @@ class VideoRotator:
         self.stop_requested = False
         self.current_process = None
         
+        # 处理命令行参数（拖拽到exe的文件）
+        self.process_command_line_args()
+        
         # 检查FFmpeg是否可用
         self.ffmpeg_path = self.find_ffmpeg()
         if not self.ffmpeg_path:
@@ -32,6 +43,9 @@ class VideoRotator:
             
         # 创建界面
         self.create_widgets()
+        
+        # 设置拖拽支持
+        self.setup_drag_drop()
         
         # 加载配置
         self.load_config()
@@ -63,21 +77,74 @@ class VideoRotator:
                 
         return None
     
+    def process_command_line_args(self):
+        """处理命令行参数（拖拽到exe的文件）"""
+        if len(sys.argv) > 1:
+            for arg in sys.argv[1:]:
+                # 规范化路径
+                path = os.path.normpath(os.path.abspath(arg))
+                if os.path.isfile(path):
+                    # 检查是否为视频文件
+                    if self.is_video_file(path):
+                        self.video_files.append(path)
+                elif os.path.isdir(path):
+                    # 添加目录中的所有视频文件
+                    self.add_videos_from_directory(path)
+    
+    def is_video_file(self, filepath):
+        """检查文件是否为视频文件"""
+        extensions = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm', '.m4v')
+        return filepath.lower().endswith(extensions)
+    
+    def add_videos_from_directory(self, directory):
+        """从目录中添加所有视频文件"""
+        for root_dir, _, files in os.walk(directory):
+            for file in files:
+                if self.is_video_file(file):
+                    full_path = os.path.normpath(os.path.join(root_dir, file))
+                    if full_path not in self.video_files:
+                        self.video_files.append(full_path)
+    
+    def setup_drag_drop(self):
+        """设置拖拽支持"""
+        if DRAG_DROP_AVAILABLE:
+            # 为文件列表框设置拖拽支持
+            self.file_listbox.drop_target_register(DND_FILES)
+            self.file_listbox.dnd_bind('<<Drop>>', self.on_drop)
+            
+            # 为主窗口设置拖拽支持
+            self.root.drop_target_register(DND_FILES)
+            self.root.dnd_bind('<<Drop>>', self.on_drop)
+    
+    def on_drop(self, event):
+        """处理拖拽事件"""
+        files = self.root.tk.splitlist(event.data)
+        for file_path in files:
+            # 规范化路径
+            path = os.path.normpath(os.path.abspath(file_path))
+            if os.path.isfile(path):
+                if self.is_video_file(path) and path not in self.video_files:
+                    self.video_files.append(path)
+            elif os.path.isdir(path):
+                self.add_videos_from_directory(path)
+        
+        self.update_file_list()
+        return 'break'
+    
     def run_ffmpeg(self, cmd):
         """运行FFmpeg命令并处理Windows路径问题"""
-        # 确保所有路径都用双引号括起来，避免空格问题
+        # 规范化命令中的所有路径
         formatted_cmd = []
         for part in cmd:
-            if os.path.exists(part) or (part.startswith('-') and ':' in part):
-                # 处理中文字符路径问题
-                formatted_cmd.append(part)
+            if os.path.exists(part):
+                # 规范化现有文件路径
+                formatted_cmd.append(os.path.normpath(os.path.abspath(part)))
+            elif part == "ffmpeg":
+                # 使用找到的ffmpeg路径
+                formatted_cmd.append(self.ffmpeg_path)
             else:
                 formatted_cmd.append(part)
                 
-        # 使用找到的ffmpeg路径
-        if formatted_cmd[0] == "ffmpeg":
-            formatted_cmd[0] = self.ffmpeg_path
-            
         # 在Windows上使用shell=False避免编码问题
         try:
             return subprocess.Popen(
@@ -87,17 +154,56 @@ class VideoRotator:
                 universal_newlines=True,
                 bufsize=1,
                 encoding='utf-8',
-                errors='replace'
+                errors='replace',
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
             )
-        except:
-            # 如果utf-8编码失败，尝试使用默认编码
-            return subprocess.Popen(
-                formatted_cmd, 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                bufsize=1
-            )
+        except Exception as e:
+            # 如果utf-8编码失败，尝试使用系统默认编码
+            try:
+                return subprocess.Popen(
+                    formatted_cmd, 
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=True,
+                    bufsize=1,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                )
+            except Exception as e2:
+                self.log_message(f"FFmpeg启动失败: {str(e2)}")
+                raise e2
+    
+    def run_ffmpeg_simple(self, input_file, output_file, rotation):
+        """运行FFmpeg命令（简化版本，支持硬件加速）"""
+        try:
+            # 规范化路径
+            input_file = os.path.normpath(input_file)
+            output_file = os.path.normpath(output_file)
+            
+            # 构建FFmpeg命令
+            ffmpeg_path = self.ffmpeg_path
+            
+            # 基础命令
+            cmd = [ffmpeg_path, "-i", input_file]
+            
+            # 添加硬件加速参数
+            hw_params = self.get_hw_accel_params()
+            if hw_params:
+                cmd.extend(hw_params)
+            
+            # 添加旋转参数
+            cmd.extend(["-vf", f"transpose={rotation}", "-y", output_file])
+            
+            # 运行命令
+            result = subprocess.run(cmd, capture_output=True, text=True, 
+                                  creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0)
+            
+            if result.returncode != 0:
+                raise Exception(f"FFmpeg错误: {result.stderr}")
+            
+            return True
+        except Exception as e:
+            self.log_message(f"处理失败: {str(e)}")
+            return False
     
     def create_widgets(self):
         # 主框架
@@ -152,28 +258,92 @@ class VideoRotator:
         self.suffix_var = tk.StringVar(value="_rotated")
         ttk.Entry(settings_frame, textvariable=self.suffix_var, width=15).grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
         
-        ttk.Label(settings_frame, text="输出目录:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
+        # 输出选项
+        ttk.Label(settings_frame, text="输出位置:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
+        self.output_option_var = tk.StringVar(value="源文件目录")
+        output_option_frame = ttk.Frame(settings_frame)
+        output_option_frame.grid(row=2, column=1, sticky=tk.W, padx=5, pady=5)
+        
+        ttk.Radiobutton(output_option_frame, text="源文件目录", variable=self.output_option_var, 
+                       value="源文件目录", command=self.on_output_option_changed).pack(side=tk.LEFT)
+        ttk.Radiobutton(output_option_frame, text="桌面", variable=self.output_option_var, 
+                       value="桌面", command=self.on_output_option_changed).pack(side=tk.LEFT)
+        ttk.Radiobutton(output_option_frame, text="指定目录", variable=self.output_option_var, 
+                       value="指定目录", command=self.on_output_option_changed).pack(side=tk.LEFT)
+        
+        # 自定义输出目录
+        self.custom_dir_frame = ttk.Frame(settings_frame)
+        self.custom_dir_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), padx=5, pady=5)
+        self.custom_dir_frame.columnconfigure(1, weight=1)
+        
+        ttk.Label(self.custom_dir_frame, text="自定义目录:").grid(row=0, column=0, sticky=tk.W, padx=5)
         self.output_dir_var = tk.StringVar(value=os.path.expanduser("~/Desktop"))
-        ttk.Entry(settings_frame, textvariable=self.output_dir_var, width=30).grid(row=2, column=1, sticky=(tk.W, tk.E), padx=5, pady=5)
-        ttk.Button(settings_frame, text="浏览", command=self.select_output_dir).grid(row=2, column=2, padx=5, pady=5)
+        self.output_dir_entry = ttk.Entry(self.custom_dir_frame, textvariable=self.output_dir_var, width=30)
+        self.output_dir_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=5)
+        self.output_dir_btn = ttk.Button(self.custom_dir_frame, text="浏览", command=self.select_output_dir)
+        self.output_dir_btn.grid(row=0, column=2, padx=5)
+        
+        # 输出目录创建选项
+        self.create_subdir_var = tk.BooleanVar(value=False)
+        self.create_subdir_check = ttk.Checkbutton(self.custom_dir_frame, text="创建子目录（按日期）", 
+                                                  variable=self.create_subdir_var)
+        self.create_subdir_check.grid(row=1, column=0, columnspan=3, sticky=tk.W, padx=5, pady=2)
+        
+        # 初始状态下隐藏自定义目录选项
+        self.on_output_option_changed()
+        
+        # 高级设置区域
+        advanced_frame = ttk.LabelFrame(main_frame, text="高级设置", padding="5")
+        advanced_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N), pady=5)
+        advanced_frame.columnconfigure(1, weight=1)
+        
+        # 硬件加速设置
+        ttk.Label(advanced_frame, text="硬件加速:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        self.hw_accel_var = tk.StringVar(value="无")
+        hw_accel_frame = ttk.Frame(advanced_frame)
+        hw_accel_frame.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
+        
+        ttk.Radiobutton(hw_accel_frame, text="无", variable=self.hw_accel_var, value="无").pack(side=tk.LEFT)
+        ttk.Radiobutton(hw_accel_frame, text="NVIDIA (NVENC)", variable=self.hw_accel_var, value="nvenc").pack(side=tk.LEFT)
+        ttk.Radiobutton(hw_accel_frame, text="Intel (QSV)", variable=self.hw_accel_var, value="qsv").pack(side=tk.LEFT)
+        ttk.Radiobutton(hw_accel_frame, text="AMD (AMF)", variable=self.hw_accel_var, value="amf").pack(side=tk.LEFT)
+        
+        # 并发任务数设置
+        ttk.Label(advanced_frame, text="并发任务数:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        self.concurrent_tasks_var = tk.IntVar(value=1)
+        concurrent_frame = ttk.Frame(advanced_frame)
+        concurrent_frame.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
+        
+        ttk.Scale(concurrent_frame, from_=1, to=8, variable=self.concurrent_tasks_var, 
+                 orient=tk.HORIZONTAL, length=200).pack(side=tk.LEFT)
+        self.concurrent_label = ttk.Label(concurrent_frame, text="1")
+        self.concurrent_label.pack(side=tk.LEFT, padx=(10, 0))
+        
+        # 绑定滑块变化事件
+        self.concurrent_tasks_var.trace('w', self.on_concurrent_changed)
         
         # 进度区域
         progress_frame = ttk.LabelFrame(main_frame, text="处理进度", padding="5")
-        progress_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+        progress_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         progress_frame.columnconfigure(0, weight=1)
         
-        self.progress_bar = ttk.Progressbar(progress_frame, mode='determinate')
-        self.progress_bar.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        # 总体进度条
+        self.overall_progress_bar = ttk.Progressbar(progress_frame, mode='determinate')
+        self.overall_progress_bar.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=2)
+        
+        # 当前任务进度条
+        self.current_progress_bar = ttk.Progressbar(progress_frame, mode='determinate')
+        self.current_progress_bar.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=2)
         
         self.status_var = tk.StringVar(value="就绪")
-        ttk.Label(progress_frame, textvariable=self.status_var).grid(row=1, column=0, sticky=tk.W, pady=2)
+        ttk.Label(progress_frame, textvariable=self.status_var).grid(row=2, column=0, sticky=tk.W, pady=2)
         
         self.time_var = tk.StringVar(value="剩余时间: --:--:--")
-        ttk.Label(progress_frame, textvariable=self.time_var).grid(row=1, column=1, sticky=tk.E, pady=2)
+        ttk.Label(progress_frame, textvariable=self.time_var).grid(row=2, column=1, sticky=tk.E, pady=2)
         
         # 按钮区域
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=3, column=0, columnspan=2, pady=10)
+        button_frame.grid(row=6, column=0, columnspan=2, pady=10)
         
         self.start_btn = ttk.Button(button_frame, text="开始处理", command=self.start_processing)
         self.start_btn.pack(side=tk.LEFT, padx=5)
@@ -183,7 +353,7 @@ class VideoRotator:
         
         # 日志区域
         log_frame = ttk.LabelFrame(main_frame, text="日志", padding="5")
-        log_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+        log_frame.grid(row=7, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
         
@@ -208,11 +378,7 @@ class VideoRotator:
         """添加文件夹中的所有视频文件到列表"""
         folder = filedialog.askdirectory(title="选择包含视频文件的文件夹")
         if folder:
-            extensions = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm', '.m4v')
-            for root_dir, _, files in os.walk(folder):
-                for file in files:
-                    if file.lower().endswith(extensions):
-                        self.video_files.append(os.path.join(root_dir, file))
+            self.add_videos_from_directory(folder)
             self.update_file_list()
     
     def clear_list(self):
@@ -224,13 +390,50 @@ class VideoRotator:
         """更新文件列表显示"""
         self.file_listbox.delete(0, tk.END)
         for file in self.video_files:
-            self.file_listbox.insert(tk.END, os.path.basename(file))
+            filename = os.path.basename(file)
+            display_text = f"{filename} ({file})"
+            self.file_listbox.insert(tk.END, display_text)
+    
+    def on_output_option_changed(self):
+        """输出选项变化时的处理"""
+        option = self.output_option_var.get()
+        if option == "源文件目录":
+            # 隐藏自定义目录选项
+            for widget in self.custom_dir_frame.winfo_children():
+                widget.grid_remove()
+        elif option == "桌面":
+            # 隐藏自定义目录选项，但设置桌面路径
+            for widget in self.custom_dir_frame.winfo_children():
+                widget.grid_remove()
+            self.output_dir_var.set(os.path.expanduser("~/Desktop"))
+        else:
+            # 显示自定义目录选项
+            for widget in self.custom_dir_frame.winfo_children():
+                widget.grid()
+    
+    def on_concurrent_changed(self, *args):
+        """并发任务数变化时的处理"""
+        value = self.concurrent_tasks_var.get()
+        self.concurrent_label.config(text=str(value))
+    
+    def get_hw_accel_params(self):
+        """获取硬件加速参数"""
+        hw_accel = self.hw_accel_var.get()
+        if hw_accel == "无":
+            return []
+        elif hw_accel == "nvenc":
+            return ["-c:v", "h264_nvenc"]
+        elif hw_accel == "qsv":
+            return ["-c:v", "h264_qsv"]
+        elif hw_accel == "amf":
+            return ["-c:v", "h264_amf"]
+        return []
     
     def select_output_dir(self):
         """选择输出目录"""
         directory = filedialog.askdirectory(title="选择输出目录")
         if directory:
-            self.output_dir_var.set(directory)
+            self.output_dir_var.set(os.path.normpath(directory))
     
     def log_message(self, message):
         """添加消息到日志"""
@@ -246,24 +449,41 @@ class VideoRotator:
             messagebox.showwarning("警告", "请先添加视频文件")
             return
         
-        # 检查输出目录
-        output_dir = self.output_dir_var.get()
-        if not os.path.exists(output_dir):
-            try:
-                os.makedirs(output_dir)
-            except OSError as e:
-                messagebox.showerror("错误", f"无法创建输出目录: {e}")
-                return
+        # 检查输出目录（除了源文件目录选项）
+        option = self.output_option_var.get()
+        if option == "桌面":
+            output_dir = os.path.expanduser("~/Desktop")
+            if hasattr(self, 'create_subdir_var') and self.create_subdir_var.get():
+                date_str = datetime.now().strftime("%Y%m%d")
+                output_dir = os.path.join(output_dir, f"视频旋转_{date_str}")
+            if not os.path.exists(output_dir):
+                try:
+                    os.makedirs(output_dir)
+                except OSError as e:
+                    messagebox.showerror("错误", f"无法创建输出目录: {e}")
+                    return
+        elif option == "指定目录":
+            output_dir = self.output_dir_var.get()
+            if hasattr(self, 'create_subdir_var') and self.create_subdir_var.get():
+                date_str = datetime.now().strftime("%Y%m%d")
+                output_dir = os.path.join(output_dir, f"视频旋转_{date_str}")
+            if not os.path.exists(output_dir):
+                try:
+                    os.makedirs(output_dir)
+                except OSError as e:
+                    messagebox.showerror("错误", f"无法创建输出目录: {e}")
+                    return
         
         # 更新界面状态
         self.processing = True
         self.stop_requested = False
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
-        self.progress_bar.config(value=0)
+        self.overall_progress_bar.config(value=0)
+        self.current_progress_bar.config(value=0)
         
         # 开始处理线程
-        thread = threading.Thread(target=self.process_videos)
+        thread = threading.Thread(target=self.process_videos_concurrent)
         thread.daemon = True
         thread.start()
     
@@ -277,8 +497,77 @@ class VideoRotator:
                 pass
         self.log_message("用户请求停止处理...")
     
+    def process_videos_concurrent(self):
+        """并发处理所有视频"""
+        import concurrent.futures
+        
+        total_files = len(self.video_files)
+        max_workers = self.concurrent_tasks_var.get()
+        processed_files = 0
+        failed_files = 0
+        start_time = time.time()
+        
+        def process_with_progress(file_info):
+            """处理单个文件并返回结果"""
+            index, input_file = file_info
+            try:
+                # 更新当前处理状态
+                self.root.after(0, lambda: self.status_var.set(f"处理中: {os.path.basename(input_file)} ({index+1}/{total_files})"))
+                
+                success = self.process_single_video(input_file)
+                return (index, input_file, success)
+            except Exception as e:
+                self.log_message(f"处理文件 {input_file} 时出错: {str(e)}")
+                return (index, input_file, False)
+        
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # 提交所有任务
+                file_tasks = [(i, file) for i, file in enumerate(self.video_files)]
+                future_to_file = {executor.submit(process_with_progress, task): task for task in file_tasks}
+                
+                # 处理完成的任务
+                for future in concurrent.futures.as_completed(future_to_file):
+                    if self.stop_requested:
+                        # 取消所有未完成的任务
+                        for f in future_to_file:
+                            f.cancel()
+                        break
+                    
+                    try:
+                        index, input_file, success = future.result()
+                        if success:
+                            processed_files += 1
+                            self.log_message(f"完成: {os.path.basename(input_file)}")
+                        else:
+                            failed_files += 1
+                            self.log_message(f"失败: {os.path.basename(input_file)}")
+                        
+                        # 更新总体进度
+                        completed_tasks = processed_files + failed_files
+                        overall_progress = (completed_tasks / total_files) * 100
+                        self.root.after(0, lambda p=overall_progress: self.overall_progress_bar.config(value=p))
+                        
+                        # 计算剩余时间
+                        elapsed = time.time() - start_time
+                        if completed_tasks > 0:
+                            time_per_file = elapsed / completed_tasks
+                            remaining = time_per_file * (total_files - completed_tasks)
+                            self.root.after(0, lambda r=remaining: self.time_var.set(f"剩余时间: {str(timedelta(seconds=int(r)))}"))
+                        
+                    except Exception as e:
+                        failed_files += 1
+                        self.log_message(f"任务执行出错: {str(e)}")
+        
+        except Exception as e:
+            self.log_message(f"并发处理出错: {str(e)}")
+        
+        # 处理完成
+        self.processing = False
+        self.root.after(0, self.processing_finished, processed_files, total_files)
+    
     def process_videos(self):
-        """处理所有视频"""
+        """处理所有视频（单线程版本）"""
         total_files = len(self.video_files)
         processed_files = 0
         start_time = time.time()
@@ -289,7 +578,7 @@ class VideoRotator:
             
             # 更新状态
             self.status_var.set(f"处理中: {os.path.basename(input_file)} ({i+1}/{total_files})")
-            self.progress_bar.config(value=(i / total_files) * 100)
+            self.overall_progress_bar.config(value=(i / total_files) * 100)
             
             # 计算剩余时间
             elapsed = time.time() - start_time
@@ -317,7 +606,8 @@ class VideoRotator:
         """处理完成后的清理工作"""
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
-        self.progress_bar.config(value=100)
+        self.overall_progress_bar.config(value=100)
+        self.current_progress_bar.config(value=0)
         self.status_var.set(f"处理完成: {processed}/{total} 个文件")
         self.time_var.set("剩余时间: --:--:--")
         
@@ -332,19 +622,46 @@ class VideoRotator:
     def process_single_video(self, input_file):
         """处理单个视频文件"""
         try:
+            # 规范化输入文件路径
+            input_file = os.path.normpath(os.path.abspath(input_file))
+            
             # 生成输出文件名
             base_name = os.path.splitext(os.path.basename(input_file))[0]
             ext = os.path.splitext(input_file)[1]
             suffix = self.suffix_var.get()
-            output_file = os.path.join(self.output_dir_var.get(), f"{base_name}{suffix}{ext}")
+            
+            # 根据输出选项确定输出目录
+            option = self.output_option_var.get()
+            if option == "源文件目录":
+                output_dir = os.path.dirname(input_file)
+            elif option == "桌面":
+                output_dir = os.path.expanduser("~/Desktop")
+                # 如果选择创建子目录，添加日期子目录
+                if hasattr(self, 'create_subdir_var') and self.create_subdir_var.get():
+                    date_str = datetime.now().strftime("%Y%m%d")
+                    output_dir = os.path.join(output_dir, f"视频旋转_{date_str}")
+            else:
+                output_dir = os.path.normpath(self.output_dir_var.get())
+                # 如果选择创建子目录，添加日期子目录
+                if hasattr(self, 'create_subdir_var') and self.create_subdir_var.get():
+                    date_str = datetime.now().strftime("%Y%m%d")
+                    output_dir = os.path.join(output_dir, f"视频旋转_{date_str}")
+            
+            # 确保输出目录存在
+            if not os.path.exists(output_dir):
+                try:
+                    os.makedirs(output_dir)
+                    self.log_message(f"创建输出目录: {output_dir}")
+                except OSError as e:
+                    self.log_message(f"无法创建输出目录 {output_dir}: {e}")
+                    return False
+            
+            output_file = os.path.normpath(os.path.join(output_dir, f"{base_name}{suffix}{ext}"))
             
             # 检查文件是否已存在
-            counter = 1
-            original_output = output_file
-            while os.path.exists(output_file):
+            if os.path.exists(output_file):
                 if not self.confirm_overwrite(output_file):
                     return False  # 用户选择不覆盖
-                break  # 用户选择覆盖，继续处理
             
             # 使用重新编码方式旋转视频
             return self.reencode_video(input_file, output_file)
@@ -417,7 +734,7 @@ class VideoRotator:
                         hours, minutes, seconds = map(float, time_match.groups())
                         current_time = hours * 3600 + minutes * 60 + seconds
                         progress = (current_time / duration) * 100
-                        self.progress_bar.config(value=progress)
+                        self.current_progress_bar.config(value=progress)
             
             # 等待进程完成
             self.current_process.wait()
@@ -447,7 +764,15 @@ class VideoRotator:
                     config = json.load(f)
                     self.rotation_var.set(config.get('rotation', '顺时针90度'))
                     self.suffix_var.set(config.get('suffix', '_rotated'))
+                    self.output_option_var.set(config.get('output_option', '源文件目录'))
                     self.output_dir_var.set(config.get('output_dir', os.path.expanduser("~/Desktop")))
+                    self.hw_accel_var.set(config.get('hw_accel', '无'))
+                    self.concurrent_tasks_var.set(config.get('concurrent_tasks', 1))
+                    if hasattr(self, 'create_subdir_var'):
+                        self.create_subdir_var.set(config.get('create_subdir', False))
+                    # 更新界面状态
+                    self.on_output_option_changed()
+                    self.on_concurrent_changed()
             except:
                 pass
     
@@ -456,7 +781,11 @@ class VideoRotator:
         config = {
             'rotation': self.rotation_var.get(),
             'suffix': self.suffix_var.get(),
-            'output_dir': self.output_dir_var.get()
+            'output_option': self.output_option_var.get(),
+            'output_dir': self.output_dir_var.get(),
+            'hw_accel': self.hw_accel_var.get(),
+            'concurrent_tasks': self.concurrent_tasks_var.get(),
+            'create_subdir': self.create_subdir_var.get() if hasattr(self, 'create_subdir_var') else False
         }
         
         config_path = os.path.join(os.path.expanduser("~"), ".video_rotator_config.json")
@@ -468,8 +797,17 @@ class VideoRotator:
 
 def main():
     """主函数"""
-    root = tk.Tk()
+    if DRAG_DROP_AVAILABLE:
+        root = TkinterDnD.Tk()
+    else:
+        root = tk.Tk()
+    
     app = VideoRotator(root)
+    
+    # 如果有命令行参数传入的文件，更新文件列表显示
+    if app.video_files:
+        app.update_file_list()
+    
     root.mainloop()
 
 if __name__ == "__main__":
