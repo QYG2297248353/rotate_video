@@ -45,9 +45,24 @@ def clean_build():
         spec_file.unlink()
         print(f"✅ 清理文件: {spec_file}")
 
+def check_ffmpeg_files():
+    """检查项目目录中是否存在FFmpeg文件"""
+    ffmpeg_files = ['ffmpeg.exe', 'ffprobe.exe']
+    found_files = []
+    
+    for file in ffmpeg_files:
+        if os.path.exists(file):
+            found_files.append(file)
+            print(f"✅ 发现FFmpeg文件: {file}")
+    
+    return found_files
+
 def build_executable():
     """构建可执行文件"""
     print("🚀 开始构建可执行文件...")
+    
+    # 检查FFmpeg文件
+    ffmpeg_files = check_ffmpeg_files()
     
     # 构建命令
     cmd = [
@@ -67,6 +82,13 @@ def build_executable():
         '--noconfirm',                  # 不询问覆盖
         'rotate_video.py'               # 主入口文件
     ]
+    
+    # 如果找到FFmpeg文件，将它们添加到打包中
+    if ffmpeg_files:
+        print(f"📦 将打包 {len(ffmpeg_files)} 个FFmpeg文件")
+        for file in ffmpeg_files:
+            cmd.append(f'--add-binary={file};.')
+            print(f"  - {file}")
     
     try:
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)

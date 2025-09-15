@@ -3,6 +3,7 @@ import subprocess
 import threading
 import time
 from datetime import datetime
+import sys
 
 class VideoProcessor:
     """视频处理类，负责FFmpeg相关的视频旋转操作"""
@@ -14,6 +15,8 @@ class VideoProcessor:
         self.total_files = 0
         self.completed_files = 0
         self.start_time = None
+        self.ffmpeg_path = self.find_ffmpeg()  # 查找FFmpeg路径
+        self.ffprobe_path = self.find_ffprobe()  # 查找FFprobe路径
     
     def get_rotation_filter(self, rotation):
         """根据旋转方向返回FFmpeg滤镜参数"""
@@ -65,7 +68,7 @@ class VideoProcessor:
         """重新编码视频文件"""
         try:
             # 构建FFmpeg命令
-            cmd = ["ffmpeg", "-i", input_file]
+            cmd = [self.ffmpeg_path, "-i", input_file]
             
             # 添加硬件加速参数
             hw_params = self.get_hw_accel_params(hw_accel)
@@ -257,10 +260,64 @@ class VideoProcessor:
             self.ui_callback('log', "⏹ 处理已停止")
             self.ui_callback('status', "已停止")
     
+    def find_ffmpeg(self):
+        """查找FFmpeg可执行文件路径"""
+        # 优先级：1. 打包的资源 2. 程序同目录 3. 系统环境变量
+        
+        # 1. 检查打包的资源（PyInstaller）
+        if getattr(sys, 'frozen', False):
+            # 运行在打包的可执行文件中
+            bundle_dir = sys._MEIPASS
+            ffmpeg_bundled = os.path.join(bundle_dir, 'ffmpeg.exe')
+            if os.path.exists(ffmpeg_bundled):
+                return ffmpeg_bundled
+        
+        # 2. 检查程序同目录
+        if getattr(sys, 'frozen', False):
+            # 可执行文件目录
+            exe_dir = os.path.dirname(sys.executable)
+        else:
+            # 脚本文件目录
+            exe_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        ffmpeg_local = os.path.join(exe_dir, 'ffmpeg.exe')
+        if os.path.exists(ffmpeg_local):
+            return ffmpeg_local
+        
+        # 3. 使用系统环境变量中的ffmpeg
+        return 'ffmpeg'
+    
+    def find_ffprobe(self):
+        """查找FFprobe可执行文件路径"""
+        # 优先级：1. 打包的资源 2. 程序同目录 3. 系统环境变量
+        
+        # 1. 检查打包的资源（PyInstaller）
+        if getattr(sys, 'frozen', False):
+            # 运行在打包的可执行文件中
+            bundle_dir = sys._MEIPASS
+            ffprobe_bundled = os.path.join(bundle_dir, 'ffprobe.exe')
+            if os.path.exists(ffprobe_bundled):
+                return ffprobe_bundled
+        
+        # 2. 检查程序同目录
+        if getattr(sys, 'frozen', False):
+            # 可执行文件目录
+            exe_dir = os.path.dirname(sys.executable)
+        else:
+            # 脚本文件目录
+            exe_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        ffprobe_local = os.path.join(exe_dir, 'ffprobe.exe')
+        if os.path.exists(ffprobe_local):
+            return ffprobe_local
+        
+        # 3. 使用系统环境变量中的ffprobe
+        return 'ffprobe'
+    
     def check_ffmpeg(self):
         """检查FFmpeg是否可用"""
         try:
-            result = subprocess.run(["ffmpeg", "-version"], 
+            result = subprocess.run([self.ffmpeg_path, "-version"], 
                                   capture_output=True, 
                                   text=True, 
                                   creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)

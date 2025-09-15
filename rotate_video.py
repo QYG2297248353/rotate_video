@@ -43,44 +43,18 @@ class VideoRotator:
         # 处理命令行参数（拖拽到exe的文件）
         self.process_command_line_args()
         
-        # 检查FFmpeg是否可用
-        self.ffmpeg_path = self.find_ffmpeg()
-        if not self.ffmpeg_path:
-            messagebox.showerror("错误", "未找到FFmpeg，请确保已安装FFmpeg并添加到系统PATH中")
-            sys.exit(1)
-            
         # 创建界面
         self.ui = VideoRotatorUI(self.root, self)
         
+        # 检查FFmpeg是否可用
+        if not self.video_processor.check_ffmpeg():
+            messagebox.showerror("错误", "未找到FFmpeg，请确保已安装FFmpeg并添加到系统PATH中，或将ffmpeg.exe放在程序目录下")
+            sys.exit(1)
+            
         # 加载配置
         self.load_config()
     
-    def find_ffmpeg(self):
-        """查找FFmpeg可执行文件路径"""
-        # 首先检查系统PATH中的ffmpeg
-        if shutil.which("ffmpeg"):
-            return "ffmpeg"
-        
-        # 检查当前目录下的ffmpeg
-        if getattr(sys, 'frozen', False):
-            # 如果是打包后的exe，检查exe所在目录
-            base_path = os.path.dirname(sys.executable)
-            ffmpeg_path = os.path.join(base_path, "ffmpeg.exe")
-            if os.path.isfile(ffmpeg_path):
-                return ffmpeg_path
-        
-        # 检查常见安装路径
-        common_paths = [
-            os.path.join(os.environ.get('ProgramFiles', ''), "ffmpeg", "bin", "ffmpeg.exe"),
-            os.path.join(os.environ.get('ProgramFiles(x86)', ''), "ffmpeg", "bin", "ffmpeg.exe"),
-            os.path.join(os.environ.get('SystemDrive', 'C:'), "ffmpeg", "bin", "ffmpeg.exe"),
-        ]
-        
-        for path in common_paths:
-            if os.path.isfile(path):
-                return path
-                
-        return None
+
     
     def process_command_line_args(self):
         """处理命令行参数（拖拽到exe的文件）"""
@@ -165,79 +139,9 @@ class VideoRotator:
         self.ui.update_file_list(self.video_files)
         return 'break'
     
-    def run_ffmpeg(self, cmd):
-        """运行FFmpeg命令并处理Windows路径问题"""
-        # 规范化命令中的所有路径
-        formatted_cmd = []
-        for part in cmd:
-            if os.path.exists(part):
-                # 规范化现有文件路径
-                formatted_cmd.append(os.path.normpath(os.path.abspath(part)))
-            elif part == "ffmpeg":
-                # 使用找到的ffmpeg路径
-                formatted_cmd.append(self.ffmpeg_path)
-            else:
-                formatted_cmd.append(part)
-                
-        # 在Windows上使用shell=False避免编码问题
-        try:
-            return subprocess.Popen(
-                formatted_cmd, 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                bufsize=1,
-                encoding='utf-8',
-                errors='replace',
-                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
-            )
-        except Exception as e:
-            # 如果utf-8编码失败，尝试使用系统默认编码
-            try:
-                return subprocess.Popen(
-                    formatted_cmd, 
-                    stdout=subprocess.PIPE, 
-                    stderr=subprocess.STDOUT,
-                    universal_newlines=True,
-                    bufsize=1,
-                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
-                )
-            except Exception as e2:
-                self.ui.log_message(f"FFmpeg启动失败: {str(e2)}")
-                raise e2
+
     
-    def run_ffmpeg_simple(self, input_file, output_file, rotation):
-        """运行FFmpeg命令（简化版本，支持硬件加速）"""
-        try:
-            # 规范化路径
-            input_file = os.path.normpath(input_file)
-            output_file = os.path.normpath(output_file)
-            
-            # 构建FFmpeg命令
-            ffmpeg_path = self.ffmpeg_path
-            
-            # 基础命令
-            cmd = [ffmpeg_path, "-i", input_file]
-            
-            # 添加硬件加速参数
-            hw_params = self.get_hw_accel_params()
-            if hw_params:
-                cmd.extend(hw_params)
-            
-            # 添加旋转参数
-            cmd.extend(["-vf", f"transpose={rotation}", "-y", output_file])
-            
-            # 运行命令
-            result = subprocess.run(cmd, capture_output=True, text=True, 
-                                  creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0)
-            
-            if result.returncode != 0:
-                raise Exception(f"FFmpeg错误: {result.stderr}")
-            
-            return True
-        except Exception as e:
-            self.ui.log_message(f"处理失败: {str(e)}")
-            return False
+
     
 
     
