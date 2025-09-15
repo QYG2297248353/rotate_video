@@ -104,8 +104,8 @@ class VideoRotatorUI:
         self.scrollable_frame.columnconfigure(0, weight=1)
         self.scrollable_frame.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
-        # 设置各行的权重，让日志区域可以伸缩
-        main_frame.rowconfigure(0, weight=0)  # 文件选择区域
+        # 设置各行的权重，让文件列表和日志区域可以伸缩
+        main_frame.rowconfigure(0, weight=1)  # 文件选择区域可伸缩
         main_frame.rowconfigure(1, weight=0)  # 旋转设置区域
         main_frame.rowconfigure(2, weight=0)  # 进度区域
         main_frame.rowconfigure(3, weight=0)  # 高级设置区域
@@ -124,9 +124,9 @@ class VideoRotatorUI:
     
     def create_file_section(self, parent):
         """创建文件选择区域"""
-        # 文件选择区域
+        # 文件选择区域 - 允许垂直扩展
         file_frame = ttk.LabelFrame(parent, text="视频文件", padding="5")
-        file_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N), pady=5)
+        file_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         file_frame.columnconfigure(1, weight=1)
         file_frame.rowconfigure(1, weight=1)
         
@@ -144,7 +144,8 @@ class VideoRotatorUI:
         list_frame.columnconfigure(0, weight=1)
         list_frame.rowconfigure(0, weight=1)
         
-        self.file_listbox = tk.Listbox(list_frame, selectmode=tk.EXTENDED, height=4)
+        # 移除固定高度，让文件列表自适应
+        self.file_listbox = tk.Listbox(list_frame, selectmode=tk.EXTENDED)
         file_scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.file_listbox.yview)
         self.file_listbox.configure(yscrollcommand=file_scrollbar.set)
         
@@ -272,13 +273,14 @@ class VideoRotatorUI:
     
     def create_log_section(self, parent):
         """创建日志区域"""
-        # 日志区域
+        # 日志区域 - 允许垂直扩展
         log_frame = ttk.LabelFrame(parent, text="日志", padding="5")
         log_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
         
-        self.log_text = tk.Text(log_frame, height=6, state=tk.DISABLED)
+        # 移除固定高度，让日志区域自适应
+        self.log_text = tk.Text(log_frame, state=tk.DISABLED, wrap=tk.WORD)
         log_scrollbar = ttk.Scrollbar(log_frame, orient=tk.VERTICAL, command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=log_scrollbar.set)
         
@@ -338,15 +340,15 @@ class VideoRotatorUI:
         copyright_frame.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 5))
         copyright_frame.columnconfigure(0, weight=1)
         
-        # 版权信息标签
-        copyright_text = "© 2024 视频旋转工具 - 基于FFmpeg开发 | 作者: AI助手 | 版本: 2.0"
-        copyright_label = ttk.Label(copyright_frame, text=copyright_text, 
-                                   font=('', 8), foreground='gray')
-        copyright_label.grid(row=0, column=0, sticky=(tk.W, tk.E))
-        
         # 添加分隔线
         separator = ttk.Separator(copyright_frame, orient='horizontal')
-        separator.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
+        separator.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
+        
+        # 版权信息标签 - 居中显示
+        copyright_text = "© 2024 视频旋转工具 - 基于FFmpeg开发 | 作者: AI助手 | 版本: 2.0"
+        copyright_label = ttk.Label(copyright_frame, text=copyright_text, 
+                                   font=('', 8), foreground='gray', anchor='center')
+        copyright_label.grid(row=1, column=0, sticky=(tk.W, tk.E))
     
     def log_message(self, message):
         """添加日志消息"""

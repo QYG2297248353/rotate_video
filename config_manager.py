@@ -120,6 +120,11 @@ class ConfigManager:
         """获取高级配置"""
         return self.config.get('advanced', {})
     
+    def update_processing_config(self, settings: Dict[str, Any]) -> None:
+        """更新处理配置"""
+        for key, value in settings.items():
+            self.set(f'processing.{key}', value)
+    
     def add_recent_file(self, file_path: str) -> None:
         """添加最近使用的文件"""
         recent_files = self.get('recent.files', [])

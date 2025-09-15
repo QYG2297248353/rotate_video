@@ -52,9 +52,6 @@ class VideoRotator:
         # 创建界面
         self.ui = VideoRotatorUI(self.root, self)
         
-        # 设置拖拽支持
-        self.setup_drag_drop()
-        
         # 加载配置
         self.load_config()
     
@@ -122,22 +119,36 @@ class VideoRotator:
         elif callback_type == 'time':
             self.ui.time_var.set(data)
         elif callback_type == 'progress':
+            # 使用平滑的进度条更新
             if 'overall' in data:
-                self.ui.overall_progress_bar['value'] = data['overall']
+                self._smooth_progress_update(self.ui.overall_progress_bar, data['overall'])
             if 'current' in data:
-                self.ui.current_progress_bar['value'] = data['current']
+                self._smooth_progress_update(self.ui.current_progress_bar, data['current'])
             self.root.update_idletasks()
     
-    def setup_drag_drop(self):
-        """设置拖拽支持"""
-        if DRAG_DROP_AVAILABLE:
-            # 为文件列表框设置拖拽支持
-            self.file_listbox.drop_target_register(DND_FILES)
-            self.file_listbox.dnd_bind('<<Drop>>', self.on_drop)
+    def _smooth_progress_update(self, progress_bar, target_value):
+        """平滑更新进度条"""
+        current_value = progress_bar['value']
+        if abs(target_value - current_value) > 0.1:  # 只有变化足够大时才进行平滑更新
+            # 计算步长，让进度条更新更平滑
+            steps = max(1, int(abs(target_value - current_value) / 2))
+            step_size = (target_value - current_value) / steps
             
-            # 为主窗口设置拖拽支持
-            self.root.drop_target_register(DND_FILES)
-            self.root.dnd_bind('<<Drop>>', self.on_drop)
+            def update_step(step):
+                if step <= steps:
+                    new_value = current_value + (step_size * step)
+                    progress_bar['value'] = new_value
+                    self.root.update_idletasks()
+                    if step < steps:
+                        self.root.after(10, lambda: update_step(step + 1))
+                else:
+                    progress_bar['value'] = target_value
+            
+            update_step(1)
+        else:
+            progress_bar['value'] = target_value
+    
+
     
     def on_drop(self, event):
         """处理拖拽事件"""

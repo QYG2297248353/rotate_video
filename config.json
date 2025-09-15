@@ -1,0 +1,30 @@
+{
+  "ui": {
+    "window_geometry": "900x650",
+    "window_min_size": [
+      750,
+      500
+    ],
+    "theme": "default"
+  },
+  "processing": {
+    "default_rotation": "顺时针90度",
+    "default_suffix": "_rotated55",
+    "default_output_option": "源文件目录",
+    "default_output_dir": "~/Desktop",
+    "create_subdir": false,
+    "hardware_acceleration": "无",
+    "max_concurrent_tasks": 1
+  },
+  "advanced": {
+    "ffmpeg_timeout": 300,
+    "log_level": "info",
+    "auto_save_config": true,
+    "check_ffmpeg_on_startup": true
+  },
+  "recent": {
+    "files": [],
+    "output_directories": [],
+    "max_recent_items": 10
+  }
+}
