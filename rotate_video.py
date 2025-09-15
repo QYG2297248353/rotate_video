@@ -239,46 +239,47 @@ class VideoRotator:
         scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
         
         # 旋转设置区域
-        settings_frame = ttk.LabelFrame(main_frame, text="旋转设置", padding="5")
+        settings_frame = ttk.LabelFrame(main_frame, text="旋转设置", padding="8")
         settings_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N), pady=5)
         settings_frame.columnconfigure(1, weight=1)
         
         # 旋转方向选择
-        ttk.Label(settings_frame, text="旋转方向:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(settings_frame, text="旋转方向:", font=('', 9, 'bold')).grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
         self.rotation_var = tk.StringVar(value="顺时针90度")
         rotation_frame = ttk.Frame(settings_frame)
         rotation_frame.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
         
-        ttk.Radiobutton(rotation_frame, text="顺时针90度", variable=self.rotation_var, value="顺时针90度").pack(side=tk.LEFT)
-        ttk.Radiobutton(rotation_frame, text="逆时针90度", variable=self.rotation_var, value="逆时针90度").pack(side=tk.LEFT)
-        ttk.Radiobutton(rotation_frame, text="180度", variable=self.rotation_var, value="180度").pack(side=tk.LEFT)
+        ttk.Radiobutton(rotation_frame, text="顺时针90°", variable=self.rotation_var, value="顺时针90度").pack(side=tk.LEFT, padx=(0, 15))
+        ttk.Radiobutton(rotation_frame, text="逆时针90°", variable=self.rotation_var, value="逆时针90度").pack(side=tk.LEFT, padx=(0, 15))
+        ttk.Radiobutton(rotation_frame, text="180°", variable=self.rotation_var, value="180度").pack(side=tk.LEFT)
         
         # 输出设置
-        ttk.Label(settings_frame, text="输出后缀:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(settings_frame, text="输出后缀:", font=('', 9, 'bold')).grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
         self.suffix_var = tk.StringVar(value="_rotated")
-        ttk.Entry(settings_frame, textvariable=self.suffix_var, width=15).grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
+        suffix_entry = ttk.Entry(settings_frame, textvariable=self.suffix_var, width=20, font=('', 9))
+        suffix_entry.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
         
         # 输出选项
-        ttk.Label(settings_frame, text="输出位置:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(settings_frame, text="输出位置:", font=('', 9, 'bold')).grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
         self.output_option_var = tk.StringVar(value="源文件目录")
         output_option_frame = ttk.Frame(settings_frame)
         output_option_frame.grid(row=2, column=1, sticky=tk.W, padx=5, pady=5)
         
         ttk.Radiobutton(output_option_frame, text="源文件目录", variable=self.output_option_var, 
-                       value="源文件目录", command=self.on_output_option_changed).pack(side=tk.LEFT)
+                       value="源文件目录", command=self.on_output_option_changed).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Radiobutton(output_option_frame, text="桌面", variable=self.output_option_var, 
-                       value="桌面", command=self.on_output_option_changed).pack(side=tk.LEFT)
+                       value="桌面", command=self.on_output_option_changed).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Radiobutton(output_option_frame, text="指定目录", variable=self.output_option_var, 
                        value="指定目录", command=self.on_output_option_changed).pack(side=tk.LEFT)
         
         # 自定义输出目录
         self.custom_dir_frame = ttk.Frame(settings_frame)
-        self.custom_dir_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), padx=5, pady=5)
+        self.custom_dir_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), padx=5, pady=5)
         self.custom_dir_frame.columnconfigure(1, weight=1)
         
         ttk.Label(self.custom_dir_frame, text="自定义目录:").grid(row=0, column=0, sticky=tk.W, padx=5)
         self.output_dir_var = tk.StringVar(value=os.path.expanduser("~/Desktop"))
-        self.output_dir_entry = ttk.Entry(self.custom_dir_frame, textvariable=self.output_dir_var, width=30)
+        self.output_dir_entry = ttk.Entry(self.custom_dir_frame, textvariable=self.output_dir_var, width=40)
         self.output_dir_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=5)
         self.output_dir_btn = ttk.Button(self.custom_dir_frame, text="浏览", command=self.select_output_dir)
         self.output_dir_btn.grid(row=0, column=2, padx=5)
@@ -292,68 +293,81 @@ class VideoRotator:
         # 初始状态下隐藏自定义目录选项
         self.on_output_option_changed()
         
+        # 进度区域
+        progress_frame = ttk.LabelFrame(main_frame, text="处理进度", padding="5")
+        progress_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N), pady=5)
+        progress_frame.columnconfigure(0, weight=1)
+        
         # 高级设置区域
         advanced_frame = ttk.LabelFrame(main_frame, text="高级设置", padding="5")
-        advanced_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N), pady=5)
+        advanced_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N), pady=5)
         advanced_frame.columnconfigure(1, weight=1)
         
         # 硬件加速设置
-        ttk.Label(advanced_frame, text="硬件加速:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(advanced_frame, text="硬件加速:", font=('', 9, 'bold')).grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
         self.hw_accel_var = tk.StringVar(value="无")
         hw_accel_frame = ttk.Frame(advanced_frame)
         hw_accel_frame.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
         
-        ttk.Radiobutton(hw_accel_frame, text="无", variable=self.hw_accel_var, value="无").pack(side=tk.LEFT)
-        ttk.Radiobutton(hw_accel_frame, text="NVIDIA (NVENC)", variable=self.hw_accel_var, value="nvenc").pack(side=tk.LEFT)
-        ttk.Radiobutton(hw_accel_frame, text="Intel (QSV)", variable=self.hw_accel_var, value="qsv").pack(side=tk.LEFT)
-        ttk.Radiobutton(hw_accel_frame, text="AMD (AMF)", variable=self.hw_accel_var, value="amf").pack(side=tk.LEFT)
+        ttk.Radiobutton(hw_accel_frame, text="无", variable=self.hw_accel_var, value="无").pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Radiobutton(hw_accel_frame, text="NVIDIA", variable=self.hw_accel_var, value="nvenc").pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Radiobutton(hw_accel_frame, text="Intel", variable=self.hw_accel_var, value="qsv").pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Radiobutton(hw_accel_frame, text="AMD", variable=self.hw_accel_var, value="amf").pack(side=tk.LEFT)
         
         # 并发任务数设置
-        ttk.Label(advanced_frame, text="并发任务数:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(advanced_frame, text="并发任务数:", font=('', 9, 'bold')).grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
         self.concurrent_tasks_var = tk.IntVar(value=1)
         concurrent_frame = ttk.Frame(advanced_frame)
         concurrent_frame.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
         
         ttk.Scale(concurrent_frame, from_=1, to=8, variable=self.concurrent_tasks_var, 
-                 orient=tk.HORIZONTAL, length=200).pack(side=tk.LEFT)
-        self.concurrent_label = ttk.Label(concurrent_frame, text="1")
+                 orient=tk.HORIZONTAL, length=180).pack(side=tk.LEFT)
+        self.concurrent_label = ttk.Label(concurrent_frame, text="1", width=3)
         self.concurrent_label.pack(side=tk.LEFT, padx=(10, 0))
         
         # 绑定滑块变化事件
         self.concurrent_tasks_var.trace('w', self.on_concurrent_changed)
-        
-        # 进度区域
-        progress_frame = ttk.LabelFrame(main_frame, text="处理进度", padding="5")
-        progress_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         progress_frame.columnconfigure(0, weight=1)
         
         # 总体进度条
+        ttk.Label(progress_frame, text="总体进度:").grid(row=0, column=0, sticky=tk.W, pady=2)
         self.overall_progress_bar = ttk.Progressbar(progress_frame, mode='determinate')
-        self.overall_progress_bar.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=2)
+        self.overall_progress_bar.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=2)
         
         # 当前任务进度条
+        ttk.Label(progress_frame, text="当前任务:").grid(row=2, column=0, sticky=tk.W, pady=2)
         self.current_progress_bar = ttk.Progressbar(progress_frame, mode='determinate')
-        self.current_progress_bar.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=2)
+        self.current_progress_bar.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=2)
+        
+        # 状态信息
+        status_info_frame = ttk.Frame(progress_frame)
+        status_info_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        status_info_frame.columnconfigure(0, weight=1)
         
         self.status_var = tk.StringVar(value="就绪")
-        ttk.Label(progress_frame, textvariable=self.status_var).grid(row=2, column=0, sticky=tk.W, pady=2)
+        ttk.Label(status_info_frame, textvariable=self.status_var).grid(row=0, column=0, sticky=tk.W)
         
         self.time_var = tk.StringVar(value="剩余时间: --:--:--")
-        ttk.Label(progress_frame, textvariable=self.time_var).grid(row=2, column=1, sticky=tk.E, pady=2)
+        ttk.Label(status_info_frame, textvariable=self.time_var).grid(row=0, column=1, sticky=tk.E)
         
         # 按钮区域
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=6, column=0, columnspan=2, pady=10)
+        button_frame.grid(row=4, column=0, columnspan=2, pady=10)
         
-        self.start_btn = ttk.Button(button_frame, text="开始处理", command=self.start_processing)
-        self.start_btn.pack(side=tk.LEFT, padx=5)
+        self.start_btn = ttk.Button(button_frame, text="🚀 开始处理", command=self.start_processing, width=14)
+        self.start_btn.pack(side=tk.LEFT, padx=8)
         
-        self.stop_btn = ttk.Button(button_frame, text="停止", command=self.stop_processing, state=tk.DISABLED)
-        self.stop_btn.pack(side=tk.LEFT, padx=5)
+        self.stop_btn = ttk.Button(button_frame, text="⏹ 停止", command=self.stop_processing, state=tk.DISABLED, width=14)
+        self.stop_btn.pack(side=tk.LEFT, padx=8)
+        
+        # 添加文件按钮
+        ttk.Button(button_frame, text="📁 添加文件", command=self.add_files, width=14).pack(side=tk.LEFT, padx=8)
+        ttk.Button(button_frame, text="📂 添加文件夹", command=self.add_folder, width=14).pack(side=tk.LEFT, padx=8)
+        ttk.Button(button_frame, text="🗑 清空列表", command=self.clear_list, width=14).pack(side=tk.LEFT, padx=8)
         
         # 日志区域
         log_frame = ttk.LabelFrame(main_frame, text="日志", padding="5")
-        log_frame.grid(row=7, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+        log_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
         
