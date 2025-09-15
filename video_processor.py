@@ -66,9 +66,23 @@ class VideoProcessor:
     
     def reencode_video(self, input_file, output_file, rotation, hw_accel, progress_callback=None):
         """重新编码视频文件"""
+        # 首先尝试使用指定的硬件加速
+        success, error = self._try_encode(input_file, output_file, rotation, hw_accel)
+        
+        # 如果硬件加速失败且不是软件编码，则回退到软件编码
+        if not success and hw_accel != "software":
+            if "进程被异常终止" in str(error) or "4294967274" in str(error):
+                if self.ui_callback:
+                    self.ui_callback('log', f"⚠️ 硬件加速失败，回退到软件编码: {os.path.basename(input_file)}")
+                success, error = self._try_encode(input_file, output_file, rotation, "software")
+        
+        return success, error
+    
+    def _try_encode(self, input_file, output_file, rotation, hw_accel):
+        """尝试编码视频文件"""
         try:
-            # 构建FFmpeg命令
-            cmd = [self.ffmpeg_path, "-i", input_file]
+            # 构建FFmpeg命令，给文件路径加双引号以处理中文、空格和特殊字符
+            cmd = [self.ffmpeg_path, "-i", f'"{input_file}"']
             
             # 添加硬件加速参数
             hw_params = self.get_hw_accel_params(hw_accel)
@@ -78,11 +92,12 @@ class VideoProcessor:
             rotation_filter = self.get_rotation_filter(rotation)
             cmd.extend(["-vf", rotation_filter])
             
-            # 添加音频复制和输出文件
-            cmd.extend(["-c:a", "copy", "-y", output_file])
+            # 添加音频复制和输出文件，输出路径也加双引号
+            cmd.extend(["-c:a", "copy", "-y", f'"{output_file}"'])
             
             if self.ui_callback:
-                self.ui_callback('log', f"开始处理: {os.path.basename(input_file)}")
+                accel_type = "软件编码" if hw_accel == "software" else f"{hw_accel.upper()}硬件加速"
+                self.ui_callback('log', f"开始处理: {os.path.basename(input_file)} ({accel_type})")
                 self.ui_callback('log', f"命令: {' '.join(cmd)}")
             
             # 启动进程
@@ -106,7 +121,21 @@ class VideoProcessor:
                         self.ui_callback('log', f"✅ 完成: {os.path.basename(output_file)}")
                     return True, None
                 else:
-                    error_msg = f"FFmpeg错误 (返回码: {process.returncode}): {stderr}"
+                    # 处理错误信息
+                    error_details = []
+                    if stderr and stderr.strip():
+                        error_details.append(f"错误输出: {stderr.strip()}")
+                    if stdout and stdout.strip():
+                        error_details.append(f"标准输出: {stdout.strip()}")
+                    
+                    # 根据返回码提供更具体的错误信息
+                    if process.returncode == 4294967274 or process.returncode == -1073741818:
+                        error_details.append("进程被异常终止，可能原因: 1)硬件加速不支持 2)文件路径包含特殊字符 3)磁盘空间不足")
+                    elif process.returncode == 1:
+                        error_details.append("FFmpeg参数错误或文件格式不支持")
+                    
+                    error_msg = f"FFmpeg错误 (返回码: {process.returncode})" + (f" - {'; '.join(error_details)}" if error_details else "")
+                    
                     if self.ui_callback:
                         self.ui_callback('log', f"❌ 失败: {os.path.basename(input_file)} - {error_msg}")
                     return False, error_msg
